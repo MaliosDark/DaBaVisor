@@ -1,0 +1,67 @@
+
+  body {
+    font-family: sans-serif;
+    background: #111;
+    color: #fff;
+    margin: 0;
+    padding: 2rem;
+  }
+
+  #diagram-container {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+  }
+
+  .mermaid {
+    display: block;
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow-x: auto;
+    overflow-y: visible;
+    text-align: center;
+  }
+
+  .mermaid svg {
+    width: 100% !important;
+    height: auto !important;
+    max-width: 100% !important;
+  }
+
+  h1 {
+    text-align: center;
+    margin-bottom: 2rem;
+  }
+
+  .db-section {
+    margin-bottom: 0;
+    background: #1b1b1b;
+    padding: 1rem;
+    border-radius: 10px;
+    box-shadow: 0 0 15px rgba(0,255,200,0.2);
+  }
+
+  .db-title {
+    font-weight: bold;
+    margin-bottom: 0.5rem;
+    text-align: left;
+  }
+
+  .updated {
+    filter: drop-shadow(0 0 10px lime);
+  }
+
+  .flowing path {
+    stroke: #00f6ff !important;
+    stroke-width: 2px;
+    stroke-dasharray: 10, 10;
+    stroke-dashoffset: 0;
+    animation: dashFlow 2s linear infinite;
+  }
+
+  @keyframes dashFlow {
+    to {
+      stroke-dashoffset: -1000;
+    }
+  }
+

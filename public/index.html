@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Data Flow Visualizer</title>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({ startOnLoad: false, theme: 'dark' });
+    window.mermaid = mermaid;
+  </script>
+
+  <style>
+    body {
+      background: #111;
+      color: #fff;
+      padding: 2rem;
+      margin: 0;
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+    #diagram-container {
+      width: 100%;
+      display: block;
+    }
+    .mermaid-wrapper {
+      display: block;
+      width: 100% !important;
+      background: #1b1b1b;
+      border-radius: 8px;
+      padding: 1rem;
+      overflow-x: auto;
+      clear: both;
+    }
+    .mermaid-wrapper .title {
+      font-weight: bold;
+      margin-bottom: .5rem;
+      color: #0ff;
+    }
+    .mermaid {
+      width: 100% !important;
+      display: block;
+    }
+    hr.separator {
+      border: none;
+      border-top: 1px solid #444;
+      margin: 2rem 0;
+      clear: both;
+    }
+    .flowing path {
+      stroke: #00f6ff !important;
+      stroke-width: 2;
+      stroke-dasharray: 10,10;
+      animation: dashFlow 2s linear infinite;
+    }
+    @keyframes dashFlow { to { stroke-dashoffset: -1000; } }
+  </style>
+</head>
+<body>
+  <h1>Data Flow Visualizer</h1>
+  <div id="diagram-container"></div>
+
+  <script>
+    const socket = io();
+
+    socket.on('updateDiagram', (allDiagrams) => {
+      const container = document.getElementById('diagram-container');
+      container.innerHTML = '';  // limpiamos
+
+      allDiagrams.forEach(({ name, diagram }, idx) => {
+        // 1) Creamos el wrapper
+        const wrap = document.createElement('div');
+        wrap.className = 'mermaid-wrapper';
+
+        const title = document.createElement('div');
+        title.className = 'title';
+        title.textContent = `📦 ${name}`;
+        wrap.appendChild(title);
+
+        // 2) Creamos el div.mermaid con el texto bruto
+        const m = document.createElement('div');
+        m.className = 'mermaid';
+        m.id = `graph_${idx}`;
+        m.textContent = diagram.trim();
+        wrap.appendChild(m);
+
+        container.appendChild(wrap);
+
+        // 3) Insertamos un separador
+        const sep = document.createElement('hr');
+        sep.className = 'separator';
+        container.appendChild(sep);
+      });
+
+      // 4) Renderizamos **todos** los .mermaid
+      mermaid.init(undefined, '.mermaid');
+
+      // 5) Aplicamos la animación a cada SVG
+      document.querySelectorAll('.mermaid svg').forEach(svg => {
+        svg.classList.add('flowing');
+        svg.setAttribute('preserveAspectRatio','xMidYMin meet');
+      });
+    });
+  </script>
+</body>
+</html>

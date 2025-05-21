@@ -6,7 +6,7 @@ const configs = require('./db/connections');
 const generateMermaid = require('./mermaidGenerator');
 
 module.exports = function(io) {
-  // 1) Emit full diagrams to everyone
+  // emit full diagrams
   async function emitAll() {
     try {
       const diagrams = await generateMermaid();
@@ -16,12 +16,12 @@ module.exports = function(io) {
     }
   }
 
-  // 2) Emit single‐edge flow events
+  // emit a single-edge flow event
   function emitFlow(name, from, to) {
     io.emit('dataFlow', { name, from, to });
   }
 
-  // Setup Redis keyspace notifications
+  // Redis keyspace notifications
   configs.filter(c => c.type === 'redis').forEach(cfg => {
     (async () => {
       try {
@@ -31,11 +31,12 @@ module.exports = function(io) {
         await sub.pSubscribe('__keyevent@0__:*', async (message) => {
           // full refresh
           await emitAll();
-          // live‐flow parse
+
+          // parse flow: e.g. "agent:key"
           const [agent, ...rest] = message.split(':');
           const name = `${cfg.name}/${agent}`;
-          const from = `${agent}_core`;
-          const to   = `${agent}_${rest.join(':')}`;
+          const from = `${cfg.name}_${agent}_core`;
+          const to   = `${cfg.name}_${agent}_${rest.join(':')}`.replace(/[:]/g,'_');
           emitFlow(name, from, to);
         });
         console.log(`✅ Redis listener on ${cfg.name}`);
@@ -45,20 +46,21 @@ module.exports = function(io) {
     })();
   });
 
-  // Setup Postgres LISTEN/NOTIFY
+  // Postgres LISTEN/NOTIFY
   configs.filter(c => c.type === 'postgres').forEach(cfg => {
     (async () => {
       const pg = new PgClient(cfg);
       try {
         await pg.connect();
-        await pg.query('LISTEN table_update'); // your DB trigger must NOTIFY table_update with payload "table:column"
+        await pg.query('LISTEN table_update'); // payload: "table:column"
         pg.on('notification', async msg => {
+          // full refresh
           await emitAll();
-          // payload like "users:email"
+
           const [tbl, col] = msg.payload.split(':');
           const name = `${cfg.name}/${tbl}`;
-          const from = `${tbl}`;
-          const to   = `${tbl}_${col}`;
+          const from = `${cfg.name}_${tbl}`;       // core node ID matches client
+          const to   = `${cfg.name}_${tbl}_${col}`; // child node ID
           emitFlow(name, from, to);
         });
         console.log(`✅ Postgres listener on ${cfg.name}`);
@@ -68,10 +70,9 @@ module.exports = function(io) {
     })();
   });
 
-  // Fallback polling every 5s
+  // fallback polling
   setInterval(emitAll, 5000);
 
-  // Immediately send snapshot on connect
   io.on('connection', async socket => {
     console.log('Client connected:', socket.id);
     await emitAll();

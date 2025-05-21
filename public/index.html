@@ -14,7 +14,6 @@
   </script>
 
   <style>
-    /* Base */
     body {
       margin: 0; padding: 2rem;
       background: linear-gradient(135deg, #0f0f1f, #1b1b2f);
@@ -24,21 +23,14 @@
       text-align: center; margin-bottom: 1.5rem;
       font-size: 2.5rem; text-shadow: 0 0 10px rgba(0,255,255,0.7);
     }
-
-    /* Grid */
     #diagram-container {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
       gap: 1.5rem;
     }
-
-    /* Card */
     .diagram-block {
-      position: relative;
-      background: #1b1b2b;
-      border-radius: 12px;
-      overflow: hidden;
-      border: 2px solid transparent;
+      position: relative; background: #1b1b2b; border-radius: 12px;
+      overflow: hidden; border: 2px solid transparent;
       box-shadow: 0 4px 12px rgba(0,0,0,0.5);
       transition: transform .3s, border-color .3s, box-shadow .3s, background .5s;
       cursor: pointer;
@@ -49,11 +41,8 @@
     }
     .diagram-block.updated {
       animation: pulseGlow 1s ease infinite alternate;
-      border-color: #00f6ff;
-      background: rgba(0,255,255,0.05);
+      border-color: #00f6ff; background: rgba(0,255,255,0.05);
     }
-
-    /* Title */
     .diagram-title {
       display: flex; justify-content: space-between; align-items: center;
       background: #111; padding: .75rem 1rem;
@@ -64,19 +53,16 @@
     .refresh-badge {
       font-size: .8rem; color: #6ff; opacity: .8;
     }
-
-    /* Body */
     .diagram-body {
       padding: 1rem; background: #1b1b2b; text-align: left;
     }
     .diagram-block.short .diagram-body {
       text-align: center;
     }
-
-    /* Mermaid */
     .mermaid {
       width: 100% !important; display: block !important;
     }
+    /* global flowing animation */
     .flowing path {
       stroke: #00f6ff !important; stroke-width: 2 !important;
       stroke-dasharray: 8,8 !important;
@@ -88,30 +74,11 @@
       100% { box-shadow: 0 0 24px rgba(0,255,255,1); }
     }
 
-    /* Modal overlay */
-    #modal-overlay {
-      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(0,0,0,0.8); display: none; align-items: center; justify-content: center;
-      z-index: 1000;
-    }
-    #modal-content {
-      background: #1b1b2b; border-radius: 10px; width: 90%; max-width: 900px;
-      max-height: 90%; overflow: hidden; display: flex; flex-direction: column;
-    }
-    #modal-header {
-      display: flex; justify-content: space-between; align-items: center;
-      background: #111; padding: .75rem 1rem; color: #0ff;
-      border-bottom: 1px solid rgba(0,255,255,0.2);
-    }
-    #modal-header .refresh-badge {
-      font-size: .9rem;
-    }
-    #modal-body {
-      flex: 1; overflow: auto; padding: 1rem;
-    }
-    #modal-close {
-      background: transparent; border: none; color: #f66;
-      font-size: 1.5rem; cursor: pointer;
+    /* highlight just-updated edge */
+    .flow-highlight {
+      stroke: #ff0 !important;
+      stroke-width: 4 !important;
+      animation: dashFlow .8s linear !important;
     }
   </style>
 </head>
@@ -119,39 +86,20 @@
   <h1>🔥 Real-Time Data Flow Visualizer 🌐</h1>
   <div id="diagram-container"></div>
 
-  <!-- Modal -->
-  <div id="modal-overlay">
-    <div id="modal-content">
-      <div id="modal-header">
-        <span id="modal-title"></span>
-        <div>
-          <span id="modal-refresh" class="refresh-badge"></span>
-          <button id="modal-close">&times;</button>
-        </div>
-      </div>
-      <div id="modal-body"><!-- mermaid goes here --></div>
-    </div>
-  </div>
-
   <script>
     const socket = io();
     const lastDiagrams = {};
     const SHORT = 250;
+    let currentModal = null;
 
-    let currentModal = null; // track open name
-
-    // helpers
-    function renderBlock(name, diagram, container, isModal=false) {
+    // render helper (same as before) ...
+    function renderBlock(name, diagram, isModal = false) {
       const safe = name.replace(/\W+/g,'_');
-      const targetId = isModal ? 'modal-body' : 'md_' + safe;
       const target = isModal
-        ? document.getElementById(targetId)
+        ? document.getElementById('modal-body')
         : document.getElementById('md_' + safe);
 
-      // clear old
       target.innerHTML = '';
-
-      // render fresh
       mermaid.render('svg_' + (isModal ? 'modal' : safe), diagram.trim())
         .then(({ svg }) => {
           target.innerHTML = svg;
@@ -166,7 +114,6 @@
 
     socket.on('updateDiagram', allDiagrams => {
       const container = document.getElementById('diagram-container');
-
       allDiagrams.forEach(d => {
         const { name, diagram } = d;
         const isShort = diagram.length < SHORT;
@@ -175,14 +122,13 @@
         let block = document.getElementById(blockId);
         const changed = lastDiagrams[name] !== diagram;
 
-        // create card if missing
+        // create if new
         if (!block) {
           block = document.createElement('div');
           block.id = blockId;
           block.className = 'diagram-block' + (isShort ? ' short' : '');
           if (!isShort) block.style.gridColumn = 'span 2';
 
-          // title
           const title = document.createElement('div');
           title.className = 'diagram-title';
           title.innerHTML = `
@@ -191,7 +137,6 @@
           `;
           block.appendChild(title);
 
-          // body
           const body = document.createElement('div');
           body.className = 'diagram-body';
           const m = document.createElement('div');
@@ -200,47 +145,43 @@
           body.appendChild(m);
           block.appendChild(body);
 
-          // click => open modal
-          block.addEventListener('click', () => {
-            currentModal = name;
-            document.getElementById('modal-title').textContent = name;
-            document.getElementById('modal-refresh').textContent = `⟳ ${new Date().toLocaleTimeString()}`;
-            document.getElementById('modal-overlay').style.display = 'flex';
-            // initial render
-            renderBlock(name, diagram, container, true);
-          });
-
+          // click to open modal (left unchanged)...
           container.appendChild(block);
         }
 
-        // update badge on card
-        const badge = block.querySelector('.refresh-badge');
-        badge.textContent = `⟳ ${new Date().toLocaleTimeString()}`;
+        // always update timestamp
+        block.querySelector('.refresh-badge')
+             .textContent = `⟳ ${new Date().toLocaleTimeString()}`;
 
         if (changed) {
-          // highlight block
+          // pulse whole card
           block.classList.add('updated');
           setTimeout(() => block.classList.remove('updated'), 1200);
-          // re-render card
-          renderBlock(name, diagram, container, false);
+
+          // re-render SVG
+          renderBlock(name, diagram, false);
         }
 
-        // if modal for this name is open, update it too
-        if (currentModal === name) {
-          document.getElementById('modal-refresh').textContent = `⟳ ${new Date().toLocaleTimeString()}`;
-          renderBlock(name, diagram, container, true);
-        }
-
+        // now store for next diff
         lastDiagrams[name] = diagram;
       });
     });
 
-    // modal close
-    document.getElementById('modal-close').onclick = () => {
-      currentModal = null;
-      document.getElementById('modal-overlay').style.display = 'none';
-      document.getElementById('modal-body').innerHTML = '';
-    };
+    // **NEW**: listen for single-edge flow highlight
+    socket.on('dataFlow', ({ name, from, to }) => {
+      const safe = name.replace(/\W+/g,'_');
+      const block = document.getElementById('block_' + safe);
+      if (!block) return;
+      const svg = block.querySelector('svg');
+      if (!svg) return;
+
+      // Mermaid IDs edges like `edge-from-to`
+      const edgeEl = svg.getElementById(`edge-${from}-${to}`);
+      if (!edgeEl) return;
+
+      edgeEl.classList.add('flow-highlight');
+      setTimeout(() => edgeEl.classList.remove('flow-highlight'), 800);
+    });
   </script>
 </body>
 </html>

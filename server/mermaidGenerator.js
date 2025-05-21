@@ -1,6 +1,9 @@
-// server/MermaidGenerator.js
+// server/mermaidGenerator.js
 
 const getConnections = require('./db');
+
+// you can tweak this threshold to suit your typical graph sizes
+const SMALL_DIAGRAM_THRESHOLD = 300; // characters
 
 module.exports = async function generateMermaid() {
   const instances = await getConnections();
@@ -18,11 +21,10 @@ module.exports = async function generateMermaid() {
       });
 
       for (const table of tables) {
-        // start a new graph for each table
+        // build one graph per table
         let diagram = 'graph TD\n';
         diagram += `  ${dbName}_${table}["${table} (${dbName})"]\n`;
 
-        // fetch columns
         const columns = await new Promise((res, rej) => {
           conn.all(
             `PRAGMA table_info(${table})`,
@@ -35,19 +37,19 @@ module.exports = async function generateMermaid() {
           diagram += `  ${dbName}_${table} --> ${dbName}_${table}_${col.name}["${col.name}: ${col.type}"]\n`;
         }
 
+        const isSmall = diagram.length < SMALL_DIAGRAM_THRESHOLD;
         results.push({
           name: `${dbName}/${table}`,
-          diagram
+          diagram,
+          isSmall
         });
       }
     }
 
     if (type === 'redis') {
-      // fetch all keys
       const keys = await conn.keys('*');
       const agentMap = {};
 
-      // group keys by agent prefix
       for (const key of keys) {
         const [agent, ...rest] = key.split(':');
         const subkey = rest.join(':');
@@ -55,7 +57,6 @@ module.exports = async function generateMermaid() {
         agentMap[agent].push({ fullKey: key, subkey });
       }
 
-      // emit one graph per agent
       for (const agent of Object.keys(agentMap)) {
         let diagram = 'graph TD\n';
         const coreId = `${dbName}_${agent}_core`;
@@ -82,9 +83,11 @@ module.exports = async function generateMermaid() {
           }
         }
 
+        const isSmall = diagram.length < SMALL_DIAGRAM_THRESHOLD;
         results.push({
           name: `${dbName}/${agent}`,
-          diagram
+          diagram,
+          isSmall
         });
       }
     }

@@ -62,23 +62,25 @@
     .mermaid {
       width: 100% !important; display: block !important;
     }
-    /* global flowing animation */
-    .flowing path {
-      stroke: #00f6ff !important; stroke-width: 2 !important;
+    /* Flowing animation for active data flow */
+    .mermaid svg path.flowing {
+      stroke: #00f6ff !important;
+      stroke-width: 2 !important;
       stroke-dasharray: 8,8 !important;
       animation: dashFlow 1.5s linear infinite !important;
     }
-    @keyframes dashFlow { to { stroke-dashoffset: -1000; } }
-    @keyframes pulseGlow {
-      0% { box-shadow: 0 0 8px rgba(0,255,255,0.6); }
-      100% { box-shadow: 0 0 24px rgba(0,255,255,1); }
-    }
-
-    /* highlight just-updated edge */
-    .flow-highlight {
+    /* Highlight just-updated edge */
+    .mermaid svg path.flow-highlight {
       stroke: #ff0 !important;
       stroke-width: 4 !important;
       animation: dashFlow .8s linear !important;
+    }
+    @keyframes dashFlow {
+      to { stroke-dashoffset: -1000; }
+    }
+    @keyframes pulseGlow {
+      0% { box-shadow: 0 0 8px rgba(0,255,255,0.6); }
+      100% { box-shadow: 0 0 24px rgba(0,255,255,1); }
     }
   </style>
 </head>
@@ -92,37 +94,53 @@
     const SHORT = 250;
     let currentModal = null;
 
-    // render helper (same as before) ...
+    // Render helper
     function renderBlock(name, diagram, isModal = false) {
-      const safe = name.replace(/\W+/g,'_');
+      const safe = name.replace(/\W+/g, '_');
       const target = isModal
         ? document.getElementById('modal-body')
         : document.getElementById('md_' + safe);
 
+      console.log(`Rendering diagram for ${name}:\n${diagram}`);
       target.innerHTML = '';
       mermaid.render('svg_' + (isModal ? 'modal' : safe), diagram.trim())
         .then(({ svg }) => {
           target.innerHTML = svg;
           const svgEl = target.querySelector('svg');
           if (svgEl) {
-            svgEl.classList.add('flowing');
-            svgEl.setAttribute('preserveAspectRatio','xMidYMin meet');
+            svgEl.setAttribute('preserveAspectRatio', 'xMidYMin meet');
+            // Ensure no default animations
+            svgEl.querySelectorAll('path').forEach(path => {
+              path.classList.remove('flowing', 'flow-highlight');
+            });
+            // Log all edge IDs
+            const edges = svgEl.querySelectorAll('path[id^="edge-"]');
+            if (edges.length === 0) {
+              console.warn(`No edges found in SVG for ${name}`);
+            } else {
+              edges.forEach(path => {
+                console.log(`Rendered edge in ${name}: ${path.id}`);
+              });
+            }
+          } else {
+            console.warn(`No SVG rendered for ${name}`);
           }
         })
-        .catch(console.error);
+        .catch(err => console.error(`Mermaid render error for ${name}:`, err));
     }
 
     socket.on('updateDiagram', allDiagrams => {
+      console.log(`Received updateDiagram with ${allDiagrams.length} diagrams`);
       const container = document.getElementById('diagram-container');
       allDiagrams.forEach(d => {
         const { name, diagram } = d;
         const isShort = diagram.length < SHORT;
-        const safe = name.replace(/\W+/g,'_');
+        const safe = name.replace(/\W+/g, '_');
         const blockId = 'block_' + safe;
         let block = document.getElementById(blockId);
         const changed = lastDiagrams[name] !== diagram;
 
-        // create if new
+        // Create if new
         if (!block) {
           block = document.createElement('div');
           block.id = blockId;
@@ -145,43 +163,76 @@
           body.appendChild(m);
           block.appendChild(body);
 
-          // click to open modal (left unchanged)...
           container.appendChild(block);
         }
 
-        // always update timestamp
+        // Always update timestamp
         block.querySelector('.refresh-badge')
              .textContent = `⟳ ${new Date().toLocaleTimeString()}`;
 
         if (changed) {
-          // pulse whole card
-          block.classList.add('updated');
-          setTimeout(() => block.classList.remove('updated'), 1200);
+          // Pulse whole card
+          block.className = 'diagram-block updated' + (isShort ? ' short' : '');
+          setTimeout(() => block.className = 'diagram-block' + (isShort ? ' short' : ''), 1200);
 
-          // re-render SVG
+          // Re-render SVG
           renderBlock(name, diagram, false);
         }
 
-        // now store for next diff
+        // Store for next diff
         lastDiagrams[name] = diagram;
       });
     });
 
-    // **NEW**: listen for single-edge flow highlight
+    // Listen for single-edge flow highlight and apply flowing animation
     socket.on('dataFlow', ({ name, from, to }) => {
-      const safe = name.replace(/\W+/g,'_');
+      console.log(`Received dataFlow: ${name}, ${from} --> ${to}`);
+      const safe = name.replace(/\W+/g, '_');
       const block = document.getElementById('block_' + safe);
-      if (!block) return;
+      if (!block) {
+        console.warn(`Block block_${safe} not found`);
+        return;
+      }
       const svg = block.querySelector('svg');
-      if (!svg) return;
-
-      // Mermaid IDs edges like `edge-from-to`
-      const edgeEl = svg.getElementById(`edge-${from}-${to}`);
-      if (!edgeEl) return;
-
-      edgeEl.classList.add('flow-highlight');
-      setTimeout(() => edgeEl.classList.remove('flow-highlight'), 800);
+      if (!svg) {
+        console.warn(`SVG not found in ${name}`);
+        return;
+      }
+      const edgeId = `edge-${from}-${to}`;
+      const edgeEl = svg.getElementById(edgeId);
+      if (!edgeEl) {
+        console.warn(`Edge ${edgeId} not found in ${name}`);
+        // Log available edges
+        const edges = svg.querySelectorAll('path[id^="edge-"]');
+        if (edges.length === 0) {
+          console.warn(`No edges found in SVG for ${name}`);
+        } else {
+          edges.forEach(path => {
+            console.warn(`Available edge in ${name}: ${path.id}`);
+          });
+        }
+        // Test CSS by animating all paths
+        svg.querySelectorAll('path').forEach(path => {
+          console.log(`Test: Applying flowing to path ${path.id || 'no-id'}`);
+          path.classList.add('flowing', 'flow-highlight');
+          setTimeout(() => {
+            path.classList.remove('flowing', 'flow-highlight');
+            console.log(`Test: Removed flowing from path ${path.id || 'no-id'}`);
+          }, 10000);
+        });
+        return;
+      }
+      console.log(`Applying flowing to ${edgeId}`);
+      edgeEl.classList.add('flowing', 'flow-highlight');
+      setTimeout(() => {
+        edgeEl.classList.remove('flowing', 'flow-highlight');
+        console.log(`Removed flowing from ${edgeId}`);
+      }, 10000); // 10 seconds for visibility
     });
+
+    // Log Socket.IO connection status
+    socket.on('connect', () => console.log('Socket.IO connected'));
+    socket.on('connect_error', err => console.error('Socket.IO connection error:', err));
   </script>
 </body>
 </html>
